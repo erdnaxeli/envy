@@ -9,6 +9,8 @@ import imp
 import shutil
 import subprocess
 
+import pkg_resources
+
 from envy import VERSION
 
 def get_envy_base():
@@ -60,6 +62,13 @@ def get_envy_path(pkg_path=None):
 def get_venv_full_package_path(pkg_path=None):
     return imp.find_module(get_package_name(pkg_path))[1]
 
+def should_create_backup(pkg_path):
+    if not original_backed_up(pkg_path):
+        return True
+
+    pkg_name = get_package_name(pkg_path)
+    return read_version(pkg_name) != pkg_resources.get_distribution(pkg_name).version
+
 def original_backed_up(pkg_path=None):
     if not os.path.isdir(get_envy_base()):
         os.makedirs('{}'.format(get_envy_base()))
@@ -69,8 +78,22 @@ def original_backed_up(pkg_path=None):
 
     return os.path.isdir(get_envy_path(pkg_path))
 
+def get_versioning_filename(pkg_name):
+    return get_envy_base() + "{}/{}.txt".format(get_active_venv(), pkg_name)
+
+def read_version(pkg_name):
+    file = open(get_versioning_filename(pkg_name), "r")
+    return file.readline().rstrip()
+
+def write_version(pkg_name):
+    version = pkg_resources.get_distribution(pkg_name).version
+    file = open(get_versioning_filename(pkg_name), "w+")
+    file.write(version)
+    file.close()
+
 def back_up(venv_pkg_path, pkg_path=None):
     shutil.copytree(venv_pkg_path, get_envy_path(pkg_path))
+    write_version(get_package_name(pkg_path))
 
 def get_editor():
     if 'EDITOR' in os.environ:
@@ -87,10 +110,9 @@ def edit(args):
         pkg_name_given_in_arg = args.path[0].split('/')[0]
 
     full_package_path = get_venv_full_package_path(pkg_name_given_in_arg)
-
     file_path = args.path[0].split("/")[-1]
 
-    if not original_backed_up(args.path[0]):
+    if should_create_backup(args.path[0]):
         print ("backing up {} ".format(full_package_path))
         back_up(full_package_path, args.path[0])
 
@@ -101,7 +123,8 @@ def edit(args):
 @validate_pkg
 def sync(args):
     venv_pkg_path = get_venv_full_package_path(args.package[0])
-    if not original_backed_up(args.package[0]):
+
+    if should_create_backup(args.package[0]):
         print ("backing up {} ".format(venv_pkg_path))
         back_up(venv_pkg_path, args.package[0])
 
@@ -129,6 +152,7 @@ def clean(args):
         # ensure successful copy before removing the backup.
         print ("removing .envie")
         shutil.rmtree(get_envy_path(args.package[0]))
+        os.remove(get_versioning_filename(get_package_name(args.package[0])))
 
 def copytree(src, dst):
     if not os.path.exists(dst):

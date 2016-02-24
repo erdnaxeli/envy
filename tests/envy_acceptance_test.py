@@ -30,7 +30,9 @@ def setup_test(f):
                         with patch('envy.application.get_envy_path', return_value="{}/tests/testsrc/someuser/.envies/someenv/some_package".format(base)):
                             with patch('envy.application.get_venv_full_package_path', return_value='{}/tests/testsrc/someuser/.virtualenvs/someenv/lib/python2.7/site-packages/some_package'.format(base)):
                                 with patch('os.path.expanduser', return_value="{}/tests/testsrc/someuser/src/some_package/some_package".format(base)):
-                                    return f(*args, **kwargs)
+                                    with patch('envy.application.pkg_resources.get_distribution') as mock_pkg:
+                                        type(mock_pkg.return_value).version = PropertyMock(return_value='1.0.0')
+                                        return f(*args, **kwargs)
 
     return wrap_patches
 
